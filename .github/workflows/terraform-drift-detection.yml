@@ -93,13 +93,20 @@ jobs:
         fi
       continue-on-error: true
 
-  #   - name: Upload Terraform Plan
-  #     if: steps.plan.outputs.changes == 'true'
-  #     uses: actions/upload-artifact@v4
-  #     with:
-  #       name: terraform-plan
-  #       path: ${{ env.WORKING_DIRECTORY }}/terraform.tfplan
-  #       retention-days: 30
+    - name: List Files (Recursive)
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: |
+        echo "Working directory: $(pwd)"
+        echo "Recursive file listing:"
+        find . -type f -print | sed 's|^\./||' | sort
+
+    - name: Upload Terraform Plan
+      if: steps.plan.outputs.changes == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan
+        path: ${{ env.WORKING_DIRECTORY }}/terraform.tfplan
+        retention-days: 30
 
   #   - name: Comment Plan Results
   #     if: github.event_name == 'workflow_dispatch'
