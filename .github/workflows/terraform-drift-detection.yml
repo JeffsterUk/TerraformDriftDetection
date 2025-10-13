@@ -77,7 +77,7 @@ jobs:
       run: terraform init
 
     - name: Terraform Plan
-      id: tf-plan
+      id: plan
       working-directory: ${{ env.WORKING_DIRECTORY }}
       run: |
         export exitcode=0
@@ -99,6 +99,12 @@ jobs:
         echo "Working directory: $(pwd)"
         echo "Recursive file listing:"
         find . -type f -print | sed 's|^\./||' | sort
+
+    - name: print out backend.tf
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: |
+        echo "Contents of backend.tf:"
+        cat backend.tf
 
     - name: Upload Terraform Plan
       if: steps.plan.outputs.changes == 'true'
