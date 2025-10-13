@@ -1,0 +1,225 @@
+# ------------------------------------------------------------------------------------ #
+# 
+#   Template Pipeline to deploy the infrastructure
+#
+# ------------------------------------------------------------------------------------ #
+parameters:
+  - name: poolName
+    type: string
+  - name: environment
+    type: string
+  - name: terraformVersion
+    type: string
+  - name: workingDirectory
+    type: string
+  - name: backendServiceArm
+    type: string
+  - name: backendAzureRmSubscriptionId
+    type: string
+  - name: backendAzureRmResourceGroupName
+    type: string
+  - name: backendAzureRmStorageAccountName
+    type: string
+  - name: backendAzureRmContainerName
+    type: string
+  - name: backendAzureRmKey
+    type: string
+  - name: environmentServiceNameAzureRM
+    type: string
+  - name: planCommandOptions
+    type: string
+  - name: applyCommandOptions
+    type: string
+  - name: task_tdd_title
+    type: string
+  - name: task_tdd_team_project
+    type: string
+  - name: task_tdd_parent_id
+    type: number
+
+stages:
+- stage: Build
+  displayName: Terraform-Plan  
+  pool:
+    name: ${{ parameters.poolName }}
+  jobs:
+  - job: TerraformPlan
+    displayName: Terraform-Plan
+    steps:
+    - checkout: self
+
+    - script: sudo apt-get -y install zip
+      displayName: 'Install Zip Utility'
+
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: ${{ parameters.terraformVersion }}
+      
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: ${{ parameters.workingDirectory }}
+        backendType: 'azurerm'
+        backendServiceArm: ${{ parameters.backendServiceArm }}
+        backendAzureRmSubscriptionId: ${{ parameters.backendAzureRmSubscriptionId }}
+        backendAzureRmResourceGroupName: ${{ parameters.backendAzureRmResourceGroupName }}
+        backendAzureRmStorageAccountName: ${{ parameters.backendAzureRmStorageAccountName }}
+        backendAzureRmContainerName: ${{ parameters.backendAzureRmContainerName }}
+        backendAzureRmKey: ${{ parameters.backendAzureRmKey }}
+        allowTelemetryCollection: false
+        
+    - task: TerraformTaskV4@4
+      displayName: 'Terrform Plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: ${{ parameters.workingDirectory }}
+        environmentServiceNameAzureRM: ${{ parameters.environmentServiceNameAzureRM }}
+        commandOptions: ${{ parameters.planCommandOptions }}
+        allowTelemetryCollection: false
+        publishPlanResults: 'Terraform Plan'
+
+    - task: CreateWorkItem@2
+      condition: |
+        and(
+          succeeded(),
+          eq(variables['Build.Reason'], 'Schedule'),
+          eq(variables['TERRAFORMTASKV42.CHANGESPRESENT'], 'true')
+        )
+      displayName: "Create Work Item"
+      inputs:
+        teamProject: ${{ parameters.task_tdd_team_project }}
+        workItemType: Task
+        title: ${{ parameters.task_tdd_title }}
+        areaPath: ${{ parameters.task_tdd_team_project }}
+        fieldMappings: |
+          System.Description=This task has been automatically created to investigate Terraform Drift Detection in run: $(Build.BuildNumber).
+          Microsoft.VSTS.Scheduling.OriginalEstimate=1
+          Microsoft.VSTS.Scheduling.RemainingWork=1
+          System.Tags=Pipeline-Generated
+        associate: true
+        # ===== Linking Inputs =====
+        linkWorkItems: true
+        linkType: "System.LinkTypes.Hierarchy-Reverse"
+        linkTarget: "id"
+        targetId: ${{ parameters.task_tdd_parent_id }}
+        # ===== Duplicate Inputs =====.
+        preventDuplicates: true
+        keyFields: |
+          System.Title
+          System.AreaPath
+          System.State==[New, Active]
+        updateDuplicates: true
+        updateRules: |
+          System.History=Terraform Drift Detected in run: $(Build.BuildNumber).
+
+    - publish: '$(System.DefaultWorkingDirectory)/terraform.tfplan'
+      artifact: terraformPlanArtifact
+
+- stage: Apply
+  displayName: Terraform-Apply 
+  pool:
+    name: ${{ parameters.poolName }}
+  dependsOn: Build
+  condition: | 
+    and(
+      eq(stageDependencies.Build.outputs['TerraformPlan.TERRAFORMTASKV42.CHANGESPRESENT'], 'true'),
+      eq(variables['Build.Reason'], 'Manual'), 
+      eq(dependencies.Build.result, 'Succeeded')
+    )
+  jobs:
+  - deployment: TerraformApply
+    displayName: Terraform-Apply
+    environment: ${{ parameters.environment }}
+    strategy: 
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - script: sudo apt-get -y install zip
+            displayName: 'Install Zip Utility'
+
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Terraform Plan Artifact'
+            inputs:
+              artifact: terraformPlanArtifact
+              path: $(System.DefaultWorkingDirectory)
+
+          - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: ${{ parameters.terraformVersion }}
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: ${{ parameters.workingDirectory }}
+              backendType: 'azurerm'
+              backendServiceArm: ${{ parameters.backendServiceArm }}
+              backendAzureRmSubscriptionId: ${{ parameters.backendAzureRmSubscriptionId }}
+              backendAzureRmResourceGroupName: ${{ parameters.backendAzureRmResourceGroupName }}
+              backendAzureRmStorageAccountName: ${{ parameters.backendAzureRmStorageAccountName }}
+              backendAzureRmContainerName: ${{ parameters.backendAzureRmContainerName }}
+              backendAzureRmKey: ${{ parameters.backendAzureRmKey }}
+              allowTelemetryCollection: false
+
+          - task: TerraformTaskV4@4
+            displayName: 'Terraform Apply'
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: ${{ parameters.workingDirectory }}
+              environmentServiceNameAzureRM: ${{ parameters.environmentServiceNameAzureRM }}
+              commandOptions: ${{ parameters.applyCommandOptions }}
+              allowTelemetryCollection: false
+
+- stage: Plan
+  displayName: Terraform-Plan 
+  pool:
+    name: ${{ parameters.poolName }}
+  dependsOn: Apply 
+  jobs:
+  - job: TerraformPlan
+    displayName: Terraform-Plan
+    steps:
+    - checkout: self
+
+    - script: sudo apt-get -y install zip
+      displayName: 'Install Zip Utility'
+
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: ${{ parameters.terraformVersion }}
+      
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: ${{ parameters.workingDirectory }}
+        backendType: 'azurerm'
+        backendServiceArm: ${{ parameters.backendServiceArm }}
+        backendAzureRmSubscriptionId: ${{ parameters.backendAzureRmSubscriptionId }}
+        backendAzureRmResourceGroupName: ${{ parameters.backendAzureRmResourceGroupName }}
+        backendAzureRmStorageAccountName: ${{ parameters.backendAzureRmStorageAccountName }}
+        backendAzureRmContainerName: ${{ parameters.backendAzureRmContainerName }}
+        backendAzureRmKey: ${{ parameters.backendAzureRmKey }}
+        allowTelemetryCollection: false
+
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: ${{ parameters.workingDirectory }}
+        environmentServiceNameAzureRM: ${{ parameters.environmentServiceNameAzureRM }}
+        commandOptions: ${{ parameters.planCommandOptions }}
+        allowTelemetryCollection: false
+        publishPlanResults: 'Terraform Validate'

@@ -1,0 +1,35 @@
+# ------------------------------------------------------------------------------------ #
+# 
+#   Pipeline to deploy the POC TDD infrastructure
+#
+# ------------------------------------------------------------------------------------ #
+
+schedules:
+  - cron: "0 3 * * 1-5" # 3am Monday to Friday
+    displayName: Daily TfState Check
+    branches:
+      include:
+        - main
+    always: true
+
+trigger: none
+
+stages:
+- template: templates/terraform.yaml
+  parameters:
+    poolName: 'Azure Pipelines'
+    environment: 'Terraform-Approvers'
+    terraformVersion: '1.13.2'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/env'
+    backendServiceArm: 'POC-TDD-UMI_Service-Connection'
+    backendAzureRmSubscriptionId: '539fe1f3-3901-4080-a6b2-2663bb5a0cd8'
+    backendAzureRmResourceGroupName: 'POC-TDD-RG'
+    backendAzureRmStorageAccountName: 'poctddsa'
+    backendAzureRmContainerName: 'tfstate'
+    backendAzureRmKey: 'POC-TDD.tfstate'
+    environmentServiceNameAzureRM: 'POC-TDD-UMI_Service-Connection'
+    planCommandOptions: '-out=$(System.DefaultWorkingDirectory)/terraform.tfplan'
+    applyCommandOptions: '-input=false $(System.DefaultWorkingDirectory)/terraform.tfplan'
+    task_tdd_title: 'POC TDD: Terraform Drift Detected'
+    task_tdd_team_project: 'Poc - Terraform Drift Detection'
+    task_tdd_parent_id: 49

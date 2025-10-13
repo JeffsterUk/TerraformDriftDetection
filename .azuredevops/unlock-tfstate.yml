@@ -1,0 +1,71 @@
+# ------------------------------------------------------------------------------------ #
+# Description:
+#   Pipeline to unlock a Terraform state file
+#
+# ------------------------------------------------------------------------------------- #
+trigger: none
+
+parameters:
+  - name: tfstate
+    displayName: Terraform State File Name (without .tfstate)
+    type: string
+  - name: lockId
+    displayName: Terraform Lock ID
+    type: string
+
+variables:
+  poolName: 'Pri-AVD-Prod-vmssagentpool'
+  terraformVersion: '1.13.2'
+  backendServiceArm: 'Pri-AVD-Prod-service-connection'
+  backendAzureRmResourceGroupName: 'rg-iac-mgmt-prd-ne-001'
+  backendAzureRmStorageAccountName: 'stiacmgmtprdeun01'
+  backendAzureRmContainerName: 'tfstate'  
+  backendAzureRmKey: '${{ parameters.tfstate }}.tfstate'
+  ${{ if startsWith(parameters.tfstate, 'gld_vm_image') }}:
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Azure_Virtual_Desktop/env/gld_vm_image'
+  ${{ elseif startsWith(parameters.tfstate, 'avd_persona') }}:
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Azure_Virtual_Desktop/env/avd_personas'
+  ${{ elseif startsWith(parameters.tfstate, 'core') }}:
+    workingDirectory: '$(System.DefaultWorkingDirectory)/Azure_Virtual_Desktop/env/core'
+
+name: Unlock-TfState • ${{ parameters.tfstate }} • $(date:dd-MM-yy HH.mm)
+
+stages:
+  - stage: Terraform_Tools
+    jobs:
+      - job: Terraform_Tools
+        pool:
+          name: ${{ variables.poolName }}
+        steps:
+
+        - script: sudo apt-get -y install zip
+          displayName: 'Install Zip Utility'
+
+        - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@1
+          displayName: 'Install Terraform'
+          inputs:
+            terraformVersion: ${{ variables.terraformVersion }}
+
+        - task: TerraformTaskV4@4
+          displayName: Terraform-Init
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: ${{ variables.workingDirectory }}
+            backendServiceArm: ${{ variables.backendServiceArm }}
+            backendAzureRmResourceGroupName: ${{ variables.backendAzureRmResourceGroupName }}
+            backendAzureRmStorageAccountName: ${{ variables.backendAzureRmStorageAccountName }}
+            backendAzureRmContainerName: ${{ variables.backendAzureRmContainerName }}
+            backendAzureRmKey: ${{ variables.backendAzureRmKey }}
+
+        - task: TerraformTaskV4@4
+          condition: succeeded()
+          displayName: Terraform Force-Unlock
+          inputs:
+            provider: "azurerm"
+            command: "custom"
+            customCommand: "force-unlock"
+            commandOptions: '-force "${{ parameters.lockId }}"'
+            outputTo: "console"
+            workingDirectory: ${{ variables.workingDirectory }}
+            environmentServiceNameAzureRM: ${{ variables.backendServiceArm }}
