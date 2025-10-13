@@ -86,9 +86,16 @@ jobs:
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
         
         if [ $exitcode -eq 1 ]; then
-          echo Terraform Plan Failed!
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "Terraform Plan Failed!"
           exit 1
-        else 
+        elif [ $exitcode -eq 2 ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          echo "Changes detected - drift found!"
+          exit 0
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "No changes detected"
           exit 0
         fi
       continue-on-error: true
