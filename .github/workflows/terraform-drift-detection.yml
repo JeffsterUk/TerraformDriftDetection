@@ -100,19 +100,6 @@ jobs:
         fi
       continue-on-error: true
 
-    - name: List Files (Recursive)
-      working-directory: ${{ env.WORKING_DIRECTORY }}
-      run: |
-        echo "Working directory: $(pwd)"
-        echo "Recursive file listing:"
-        find . -type f -print | sed 's|^\./||' | sort
-
-    - name: print out backend.tf
-      working-directory: ${{ env.WORKING_DIRECTORY }}
-      run: |
-        echo "Contents of backend.tf:"
-        cat backend.tf
-
     - name: Upload Terraform Plan
       if: steps.plan.outputs.changes == 'true'
       uses: actions/upload-artifact@v4
@@ -121,98 +108,98 @@ jobs:
         path: ${{ env.WORKING_DIRECTORY }}/terraform.tfplan
         retention-days: 30
 
-  #   - name: Comment Plan Results
-  #     if: github.event_name == 'workflow_dispatch'
-  #     uses: actions/github-script@v7
-  #     with:
-  #       script: |
-  #         const output = `
-  #         ## Terraform Plan Results
+    - name: Comment Plan Results
+      if: github.event_name == 'workflow_dispatch'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const output = `
+          ## Terraform Plan Results
           
-  #         **Changes Present:** ${{ steps.plan.outputs.changes }}
-  #         **Exit Code:** ${{ steps.plan.outputs.exitcode }}
+          **Changes Present:** ${{ steps.plan.outputs.changes }}
+          **Exit Code:** ${{ steps.plan.outputs.exitcode }}
           
-  #         ${steps.plan.outputs.changes === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
-  #         `;
+          ${steps.plan.outputs.changes === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
+          `;
           
-  #         github.rest.repos.createCommitComment({
-  #           owner: context.repo.owner,
-  #           repo: context.repo.repo,
-  #           commit_sha: context.sha,
-  #           body: output
-  #         });
+          github.rest.repos.createCommitComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: context.sha,
+            body: output
+          });
 
-  # create-issue:
-  #   name: Create Drift Detection Issue
-  #   runs-on: ubuntu-latest
-  #   needs: terraform-plan
-  #   if: needs.terraform-plan.outputs.changes == 'true' && github.event_name == 'schedule'
+  create-issue:
+    name: Create Drift Detection Issue
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: needs.terraform-plan.outputs.changes == 'true' && github.event_name == 'schedule'
     
-  #   steps:
-  #   - name: Create Issue for Drift Detection
-  #     uses: actions/github-script@v7
-  #     with:
-  #       script: |
-  #         const title = `Terraform Drift Detected - ${new Date().toISOString().split('T')[0]}`;
-  #         const body = `
-  #         ## Terraform Drift Detection Alert
+    steps:
+    - name: Create Issue for Drift Detection
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = `Terraform Drift Detected - ${new Date().toISOString().split('T')[0]}`;
+          const body = `
+          ## Terraform Drift Detection Alert
           
-  #         **Run:** ${{ github.run_number }}
-  #         **Workflow:** ${{ github.workflow }}
-  #         **Triggered:** ${{ github.event_name }}
-  #         **SHA:** ${{ github.sha }}
+          **Run:** ${{ github.run_number }}
+          **Workflow:** ${{ github.workflow }}
+          **Triggered:** ${{ github.event_name }}
+          **SHA:** ${{ github.sha }}
           
-  #         ### Details
-  #         Drift has been detected in the Terraform-managed infrastructure during the scheduled drift detection run.
+          ### Details
+          Drift has been detected in the Terraform-managed infrastructure during the scheduled drift detection run.
           
-  #         ### Next Steps
-  #         1. Review the Terraform plan output in the workflow logs
-  #         2. Investigate the cause of the drift
-  #         3. Determine if changes should be applied or if manual intervention is required
-  #         4. Run the workflow manually with \`apply_changes: true\` if changes should be applied
+          ### Next Steps
+          1. Review the Terraform plan output in the workflow logs
+          2. Investigate the cause of the drift
+          3. Determine if changes should be applied or if manual intervention is required
+          4. Run the workflow manually with \`apply_changes: true\` if changes should be applied
           
-  #         ### Links
-  #         - [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-  #         - [Repository](${{ github.server_url }}/${{ github.repository }})
+          ### Links
+          - [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - [Repository](${{ github.server_url }}/${{ github.repository }})
           
-  #         **Auto-generated by Terraform Drift Detection workflow**
-  #         `;
+          **Auto-generated by Terraform Drift Detection workflow**
+          `;
           
-  #         // Check for existing open drift detection issues
-  #         const existingIssues = await github.rest.issues.listForRepo({
-  #           owner: context.repo.owner,
-  #           repo: context.repo.repo,
-  #           state: 'open',
-  #           labels: 'terraform-drift',
-  #           per_page: 100
-  #         });
+          // Check for existing open drift detection issues
+          const existingIssues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'terraform-drift',
+            per_page: 100
+          });
           
-  #         const today = new Date().toISOString().split('T')[0];
-  #         const existingTodayIssue = existingIssues.data.find(issue => 
-  #           issue.title.includes(today)
-  #         );
+          const today = new Date().toISOString().split('T')[0];
+          const existingTodayIssue = existingIssues.data.find(issue => 
+            issue.title.includes(today)
+          );
           
-  #         if (!existingTodayIssue) {
-  #           const issue = await github.rest.issues.create({
-  #             owner: context.repo.owner,
-  #             repo: context.repo.repo,
-  #             title: title,
-  #             body: body,
-  #             labels: ['terraform-drift', 'infrastructure', 'automated']
-  #           });
+          if (!existingTodayIssue) {
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['terraform-drift', 'infrastructure', 'automated']
+            });
             
-  #           console.log(`Created issue: ${issue.data.html_url}`);
-  #         } else {
-  #           // Update existing issue with new run information
-  #           await github.rest.issues.createComment({
-  #             owner: context.repo.owner,
-  #             repo: context.repo.repo,
-  #             issue_number: existingTodayIssue.number,
-  #             body: `🔄 **Additional drift detected in run ${{ github.run_number }}**\n\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
-  #           });
+            console.log(`Created issue: ${issue.data.html_url}`);
+          } else {
+            // Update existing issue with new run information
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: existingTodayIssue.number,
+              body: `🔄 **Additional drift detected in run ${{ github.run_number }}**\n\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
             
-  #           console.log(`Updated existing issue: ${existingTodayIssue.html_url}`);
-  #         }
+            console.log(`Updated existing issue: ${existingTodayIssue.html_url}`);
+          }
 
   # terraform-apply:
   #   name: Terraform Apply
