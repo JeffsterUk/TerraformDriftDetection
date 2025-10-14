@@ -146,7 +146,7 @@ jobs:
     name: Create Drift Detection Issue
     runs-on: ubuntu-latest
     needs: terraform-plan
-    if: needs.terraform-plan.outputs.changes == 'true' && github.event_name == 'schedule'
+    # if: needs.terraform-plan.outputs.changes == 'true' && github.event_name == 'schedule'
     
     steps:
     - name: Create Issue for Drift Detection
