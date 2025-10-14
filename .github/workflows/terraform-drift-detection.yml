@@ -17,6 +17,12 @@ on:
         required: false
         default: false
         type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - 'env/**'
+      - '.github/workflows/**'
 
 env:
   TERRAFORM_VERSION: "1.13.2"
@@ -113,13 +119,16 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
+          const changesPresent = '${{ steps.plan.outputs.changes }}';
+          const exitCode = '${{ steps.plan.outputs.exitcode }}';
+          
           const output = `
           ## Terraform Plan Results
           
-          **Changes Present:** ${{ steps.plan.outputs.changes }}
-          **Exit Code:** ${{ steps.plan.outputs.exitcode }}
+          **Changes Present:** ${changesPresent}
+          **Exit Code:** ${exitCode}
           
-          ${steps.plan.outputs.changes === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
+          ${changesPresent === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
           `;
           
           github.rest.repos.createCommitComment({
