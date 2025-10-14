@@ -136,7 +136,7 @@ jobs:
           
           // Add to workflow summary
           await core.summary
-            .addHeading('Terraform Drift Detection Results')
+            .addHeading('Terraform Plan Results')
             .addRaw(output)
             .write();
           
