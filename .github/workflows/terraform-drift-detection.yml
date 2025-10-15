@@ -4,7 +4,7 @@
 #
 # ------------------------------------------------------------------------------------ #
 
-name: Terraform Drift Detection
+name: Terraform Infrastructure Deployment
 
 on:
   schedule:
@@ -26,6 +26,10 @@ env:
   TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT }}
   TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
   TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+
+defaults:
+  run:
+    working-directory: ${{ env.WORKING_DIRECTORY }}
 
 jobs:
   terraform-plan:
@@ -59,7 +63,6 @@ jobs:
         terraform_wrapper: false
 
     - name: Configure Terraform Backend
-      working-directory: ${{ env.WORKING_DIRECTORY }}
       run: |
         cat > backend.tf << EOF
         terraform {
@@ -73,12 +76,10 @@ jobs:
         EOF
 
     - name: Terraform Init
-      working-directory: ${{ env.WORKING_DIRECTORY }}
       run: terraform init
 
     - name: Terraform Plan
       id: plan
-      working-directory: ${{ env.WORKING_DIRECTORY }}
       run: |
         export exitcode=0
         terraform plan -detailed-exitcode -no-color -out terraform.tfplan || export exitcode=$?
@@ -236,11 +237,9 @@ jobs:
         terraform_wrapper: false
 
     - name: Terraform Init
-      working-directory: ${{ env.WORKING_DIRECTORY }}
       run: terraform init
 
     - name: Terraform Apply
-      working-directory: ${{ env.WORKING_DIRECTORY }}
       run: terraform apply -auto-approve terraform.tfplan
 
   # post-apply-validation:
@@ -260,7 +259,6 @@ jobs:
   #       terraform_wrapper: false
 
   #   - name: Configure Terraform Backend
-  #     working-directory: ${{ env.WORKING_DIRECTORY }}
   #     run: |
   #       cat > backend.tf << EOF
   #       terraform {
@@ -274,11 +272,9 @@ jobs:
   #       EOF
 
   #   - name: Terraform Init
-  #     working-directory: ${{ env.WORKING_DIRECTORY }}
   #     run: terraform init
 
   #   - name: Terraform Plan (Validation)
-  #     working-directory: ${{ env.WORKING_DIRECTORY }}
   #     run: |
   #       echo "Running post-apply validation plan..."
   #       terraform plan -detailed-exitcode -no-color
