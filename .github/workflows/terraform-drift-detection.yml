@@ -149,8 +149,9 @@ jobs:
               if (full) output += `<details>\n<summary><strong>Terraform Plan Results - Full</strong></summary>\n${full}\n</details>`;
             }
             
-            // Set output for use in subsequent steps
-            core.setOutput('plan-brief', planBrief);
+            // Set output for use in subsequent steps (escape for safe passage through GitHub Actions)
+            const escapedPlanBrief = planBrief.replace(/\r?\n/g, '\\n').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            core.setOutput('plan-brief', escapedPlanBrief);
             
             await core.summary.addRaw(output).write();
             console.log('Summary added with brief and full plan results');
@@ -162,8 +163,9 @@ jobs:
           script: |
             const title = `${{ github.workflow }}: Terraform Drift Detected`;
             
-            // Get the plan brief from the previous step
-            const planBrief = '${{ steps.summary.outputs.plan-brief }}';
+            // Get the plan brief from the previous step and unescape it
+            const planBriefRaw = '${{ steps.summary.outputs.plan-brief }}';
+            const planBrief = planBriefRaw.replace(/\\n/g, '\n').replace(/\\`/g, '`').replace(/\\\$/g, '$');
             const planSection = planBrief ? `\n### Terraform Plan Summary\n\n\`\`\`\n${planBrief}\n\`\`\`\n` : '';
             
             const body = `
