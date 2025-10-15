@@ -103,90 +103,47 @@ jobs:
             const path = require('path');
             
             const changesPresent = '${{ steps.plan.outputs.changes }}';
-            const exitCode = '${{ steps.plan.outputs.exitcode }}';
-            
-            let briefPlanDetails = '';
-            let fullPlanOutput = '';
-            
-            // Read the plan output file if it exists
             const planOutputPath = path.join('${{ env.WORKING_DIRECTORY }}', 'plan_output.txt');
-            if (fs.existsSync(planOutputPath)) {
-              const planOutput = fs.readFileSync(planOutputPath, 'utf8');
-              const lines = planOutput.split('\n');
-              
-              // Brief plan details - only specific lines
-              let briefLines = [];
-              let fullLines = [];
-              let foundActions = false;
-              let capturingFull = false;
+            
+            // Helper function to extract plan sections
+            function extractPlanSections(planContent) {
+              const lines = planContent.split('\n');
+              let briefLines = [], fullLines = [], capturing = false;
               
               for (const line of lines) {
-                // Start capturing both brief and full when we find "Terraform will perform the following actions:"
                 if (line.includes('Terraform will perform the following actions:')) {
                   briefLines.push(line);
                   fullLines.push(line);
-                  foundActions = true;
-                  capturingFull = true;
-                  continue;
-                }
-                
-                // If we're capturing, include everything in full
-                if (capturingFull) {
+                  capturing = true;
+                } else if (capturing) {
                   fullLines.push(line);
-                }
-                
-                // Include lines that start with "  # " in brief (resource actions only)
-                if (foundActions && line.startsWith('  # ')) {
-                  briefLines.push(line);
-                  continue;
-                }
-                
-                // Include the "Plan: " summary line in both and stop capturing
-                if (line.startsWith('Plan: ')) {
-                  if (!briefLines.includes(line)) {
-                    briefLines.push('');  // Add empty line before Plan summary
-                    briefLines.push(line);
+                  if (line.startsWith('  # ')) briefLines.push(line);
+                  if (line.startsWith('Plan: ')) {
+                    if (!briefLines.includes(line)) briefLines.push('', line);
+                    break;
                   }
-                  break; // Stop processing after Plan: line
                 }
               }
               
-              if (briefLines.length > 0) {
-                briefPlanDetails = '\n```\n' + briefLines.join('\n') + '\n```';
-              }
-              
-              if (fullLines.length > 0) {
-                fullPlanOutput = '\n```\n' + fullLines.join('\n') + '\n```';
-              }
+              return {
+                brief: briefLines.length ? '\n```\n' + briefLines.join('\n') + '\n```' : '',
+                full: fullLines.length ? '\n```\n' + fullLines.join('\n') + '\n```' : ''
+              };
             }
-
-            const statusMessage = changesPresent === 'true' ? '⚠️ Drift Detected! Infrastructure changes are required.' : '✅ No drift detected.';
             
+            // Generate summary content
+            const statusMessage = changesPresent === 'true' ? '⚠️ Changes Detected ⚠️' : '✅ No Changes Detected.';
             let output = statusMessage + '\n\n';
             
-            // Brief Plan Results (collapsible, expanded by default)
-            if (briefPlanDetails) {
-              output += `<details open>
-            <summary><strong>Terraform Plan Results - Brief</strong></summary>
-            ${briefPlanDetails}
-            </details>
-
-            `;
+            if (fs.existsSync(planOutputPath)) {
+              const planContent = fs.readFileSync(planOutputPath, 'utf8');
+              const { brief, full } = extractPlanSections(planContent);
+              
+              if (brief) output += `<details open>\n<summary><strong>Terraform Plan Results - Brief</strong></summary>\n${brief}\n</details>\n\n`;
+              if (full) output += `<details>\n<summary><strong>Terraform Plan Results - Full</strong></summary>\n${full}\n</details>`;
             }
             
-            // Full Plan Results (collapsible)
-            if (fullPlanOutput) {
-              output += `<details>
-            <summary><strong>Terraform Plan Results - Full</strong></summary>
-            ${fullPlanOutput}
-            </details>`;
-            }
-
-            // Add to workflow summary
-            await core.summary
-              .addRaw(output)
-              .write();
-
+            await core.summary.addRaw(output).write();
             console.log('Summary added with brief and full plan results');
 
   create-issue:
