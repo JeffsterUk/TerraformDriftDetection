@@ -65,21 +65,24 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
         run: |
           export exitcode=0
-          terraform plan -detailed-exitcode -no-color -out terraform.tfplan || export exitcode=$?
+          terraform plan -detailed-exitcode -no-color -out terraform.tfplan > plan_output.txt 2>&1 || export exitcode=$?
 
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
 
           if [ $exitcode -eq 1 ]; then
             echo "changes=false" >> $GITHUB_OUTPUT
             echo "Terraform Plan Failed!"
+            cat plan_output.txt
             exit 1
           elif [ $exitcode -eq 2 ]; then
             echo "changes=true" >> $GITHUB_OUTPUT
             echo "Changes detected - drift found!"
+            cat plan_output.txt
             exit 0
           else
             echo "changes=false" >> $GITHUB_OUTPUT
             echo "No changes detected"
+            cat plan_output.txt
             exit 0
           fi
         continue-on-error: true
@@ -92,13 +95,58 @@ jobs:
           path: ${{ env.WORKING_DIRECTORY }}
           retention-days: 30
 
-      - name: Comment Plan Results
-        #if: github.event_name == 'workflow_dispatch'
+      - name: Add Plan Results to Summary
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
+            const path = require('path');
+            
             const changesPresent = '${{ steps.plan.outputs.changes }}';
             const exitCode = '${{ steps.plan.outputs.exitcode }}';
+            
+            let planDetails = '';
+            
+            // Read the plan output file if it exists
+            const planOutputPath = path.join('${{ env.WORKING_DIRECTORY }}', 'plan_output.txt');
+            if (fs.existsSync(planOutputPath)) {
+              const planOutput = fs.readFileSync(planOutputPath, 'utf8');
+              const lines = planOutput.split('\n');
+              
+              let capturing = false;
+              let planDetailsLines = [];
+              
+              for (const line of lines) {
+                // Start capturing when we find "Terraform will perform the following actions:"
+                if (line.includes('Terraform will perform the following actions:')) {
+                  capturing = true;
+                  planDetailsLines.push(line);
+                  continue;
+                }
+                
+                // If we're capturing and find a line starting with "  # ", include it
+                if (capturing && line.startsWith('  # ')) {
+                  planDetailsLines.push(line);
+                  continue;
+                }
+                
+                // If we find the "Plan: " line, include it and stop
+                if (line.startsWith('Plan: ')) {
+                  planDetailsLines.push(line);
+                  break;
+                }
+                
+                // If capturing and we hit an empty line or other content, continue capturing
+                if (capturing && (line.trim() === '' || line.startsWith('  ') || line.startsWith('#'))) {
+                  planDetailsLines.push(line);
+                  continue;
+                }
+              }
+              
+              if (planDetailsLines.length > 0) {
+                planDetails = '\n\n**Plan Details:**\n```\n' + planDetailsLines.join('\n') + '\n```';
+              }
+            }
 
             const output = `
             ## Terraform Plan Results
@@ -107,6 +155,7 @@ jobs:
             **Exit Code:** ${exitCode}
 
             ${changesPresent === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
+            ${planDetails}
             `;
 
             // Add to workflow summary
