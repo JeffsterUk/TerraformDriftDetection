@@ -31,6 +31,7 @@ jobs:
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
+    environment: Production-Plan
     permissions:
       id-token: write
       contents: read
@@ -210,7 +211,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: terraform-plan
     if: needs.terraform-plan.outputs.changes-present == 'true'
-    environment: production
+    environment: Production-Apply
     permissions:
       id-token: write
       contents: read
