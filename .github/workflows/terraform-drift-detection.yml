@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------------ #
-# 
+#
 #   GitHub Actions Workflow to deploy the infrastructure and detect drift
 #
 # ------------------------------------------------------------------------------------ #
@@ -9,15 +9,15 @@ name: Terraform Infrastructure Deployment
 on:
   schedule:
     # Run at 3am Monday-Friday (UTC)
-    - cron: '0 3 * * 1-5'
+    - cron: "0 3 * * 1-5"
   workflow_dispatch:
   push:
     branches-ignore:
       - main
 
 env:
-  TERRAFORM_VERSION: "1.13.2"
-  WORKING_DIRECTORY: "./env"
+  TERRAFORM_VERSION: ${{ vars.TERRAFORM_VERSION }}
+  WORKING_DIRECTORY: ${{ vars.WORKING_DIRECTORY }}
   ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
   ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
   ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
@@ -41,153 +41,153 @@ jobs:
     outputs:
       changes-present: ${{ steps.plan.outputs.changes }}
       plan-exitcode: ${{ steps.plan.outputs.exitcode }}
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: ${{ env.TERRAFORM_VERSION }}
-        terraform_wrapper: false
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
-    - name: Terraform Init
-      working-directory: ${{ env.WORKING_DIRECTORY }}
-      run: |
-        terraform init \
-          -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
-          -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
-          -backend-config="key=${{ env.TF_STATE_KEY }}"
+      - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}"
 
-    - name: Terraform Plan
-      id: plan
-      working-directory: ${{ env.WORKING_DIRECTORY }}
-      run: |
-        export exitcode=0
-        terraform plan -detailed-exitcode -no-color -out terraform.tfplan || export exitcode=$?
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: |
+          export exitcode=0
+          terraform plan -detailed-exitcode -no-color -out terraform.tfplan || export exitcode=$?
 
-        echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
-        
-        if [ $exitcode -eq 1 ]; then
-          echo "changes=false" >> $GITHUB_OUTPUT
-          echo "Terraform Plan Failed!"
-          exit 1
-        elif [ $exitcode -eq 2 ]; then
-          echo "changes=true" >> $GITHUB_OUTPUT
-          echo "Changes detected - drift found!"
-          exit 0
-        else
-          echo "changes=false" >> $GITHUB_OUTPUT
-          echo "No changes detected"
-          exit 0
-        fi
-      continue-on-error: true
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
 
-    - name: Upload Terraform Plan
-      if: steps.plan.outputs.changes == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Terraform
-        path: ${{ env.WORKING_DIRECTORY }}
-        retention-days: 30
+          if [ $exitcode -eq 1 ]; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "Terraform Plan Failed!"
+            exit 1
+          elif [ $exitcode -eq 2 ]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected - drift found!"
+            exit 0
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+            exit 0
+          fi
+        continue-on-error: true
 
-    - name: Comment Plan Results
-      #if: github.event_name == 'workflow_dispatch'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const changesPresent = '${{ steps.plan.outputs.changes }}';
-          const exitCode = '${{ steps.plan.outputs.exitcode }}';
-          
-          const output = `
-          ## Terraform Plan Results
-          
-          **Changes Present:** ${changesPresent}
-          **Exit Code:** ${exitCode}
-          
-          ${changesPresent === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
-          `;
-          
-          // Add to workflow summary
-          await core.summary
-            .addHeading('Terraform Plan Results')
-            .addRaw(output)
-            .write();
-          
-          console.log(output);
+      - name: Upload Terraform Plan
+        if: steps.plan.outputs.changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Terraform
+          path: ${{ env.WORKING_DIRECTORY }}
+          retention-days: 30
+
+      - name: Comment Plan Results
+        #if: github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const changesPresent = '${{ steps.plan.outputs.changes }}';
+            const exitCode = '${{ steps.plan.outputs.exitcode }}';
+
+            const output = `
+            ## Terraform Plan Results
+
+            **Changes Present:** ${changesPresent}
+            **Exit Code:** ${exitCode}
+
+            ${changesPresent === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
+            `;
+
+            // Add to workflow summary
+            await core.summary
+              .addHeading('Terraform Plan Results')
+              .addRaw(output)
+              .write();
+
+            console.log(output);
 
   create-issue:
     name: Create Drift Detection Issue
     runs-on: ubuntu-latest
     needs: terraform-plan
     # if: needs.terraform-plan.outputs.changes == 'true' && github.event_name == 'schedule'
-    
+
     steps:
-    - name: Create Issue for Drift Detection
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const title = `Terraform Drift Detected - ${new Date().toISOString().split('T')[0]}`;
-          const body = `
-          ## Terraform Drift Detection Alert
-          
-          **Run:** ${{ github.run_number }}
-          **Workflow:** ${{ github.workflow }}
-          **Triggered:** ${{ github.event_name }}
-          **SHA:** ${{ github.sha }}
-          
-          ### Details
-          Drift has been detected in the Terraform-managed infrastructure during the scheduled drift detection run.
-          
-          ### Next Steps
-          1. Review the Terraform plan output in the workflow logs
-          2. Investigate the cause of the drift
-          3. Determine if changes should be applied or if manual intervention is required
-          4. Run the workflow manually with \`apply_changes: true\` if changes should be applied
-          
-          ### Links
-          - [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          - [Repository](${{ github.server_url }}/${{ github.repository }})
-          
-          **Auto-generated by Terraform Drift Detection workflow**
-          `;
-          
-          // Check for existing open drift detection issues
-          const existingIssues = await github.rest.issues.listForRepo({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            state: 'open',
-            labels: 'terraform-drift',
-            per_page: 100
-          });
-          
-          const today = new Date().toISOString().split('T')[0];
-          const existingTodayIssue = existingIssues.data.find(issue => 
-            issue.title.includes(today)
-          );
-          
-          if (!existingTodayIssue) {
-            const issue = await github.rest.issues.create({
+      - name: Create Issue for Drift Detection
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Terraform Drift Detected - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Terraform Drift Detection Alert
+
+            **Run:** ${{ github.run_number }}
+            **Workflow:** ${{ github.workflow }}
+            **Triggered:** ${{ github.event_name }}
+            **SHA:** ${{ github.sha }}
+
+            ### Details
+            Drift has been detected in the Terraform-managed infrastructure during the scheduled drift detection run.
+
+            ### Next Steps
+            1. Review the Terraform plan output in the workflow logs
+            2. Investigate the cause of the drift
+            3. Determine if changes should be applied or if manual intervention is required
+            4. Run the workflow manually with \`apply_changes: true\` if changes should be applied
+
+            ### Links
+            - [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [Repository](${{ github.server_url }}/${{ github.repository }})
+
+            **Auto-generated by Terraform Drift Detection workflow**
+            `;
+
+            // Check for existing open drift detection issues
+            const existingIssues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: title,
-              body: body,
-              labels: ['terraform-drift', 'infrastructure', 'automated']
+              state: 'open',
+              labels: 'terraform-drift',
+              per_page: 100
             });
-            
-            console.log(`Created issue: ${issue.data.html_url}`);
-          } else {
-            // Update existing issue with new run information
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: existingTodayIssue.number,
-              body: `🔄 **Additional drift detected in run ${{ github.run_number }}**\n\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
-            });
-            
-            console.log(`Updated existing issue: ${existingTodayIssue.html_url}`);
-          }
+
+            const today = new Date().toISOString().split('T')[0];
+            const existingTodayIssue = existingIssues.data.find(issue => 
+              issue.title.includes(today)
+            );
+
+            if (!existingTodayIssue) {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['terraform-drift', 'infrastructure', 'automated']
+              });
+              
+              console.log(`Created issue: ${issue.data.html_url}`);
+            } else {
+              // Update existing issue with new run information
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingTodayIssue.number,
+                body: `🔄 **Additional drift detected in run ${{ github.run_number }}**\n\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+              });
+              
+              console.log(`Updated existing issue: ${existingTodayIssue.html_url}`);
+            }
 
   terraform-apply:
     name: Terraform Apply
@@ -198,38 +198,38 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    
+
     steps:
-    - name: Download Terraform Workspace
-      uses: actions/download-artifact@v4
-      with:
-        name: Terraform
-        path: ${{ env.WORKING_DIRECTORY }}
+      - name: Download Terraform Workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: Terraform
+          path: ${{ env.WORKING_DIRECTORY }}
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: ${{ env.TERRAFORM_VERSION }}
-        terraform_wrapper: false
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
-    - name: Terraform Init
-      working-directory: ${{ env.WORKING_DIRECTORY }}
-      run: |
-        terraform init \
-          -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
-          -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
-          -backend-config="key=${{ env.TF_STATE_KEY }}"
+      - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: |
+          terraform init \
+            -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}"
 
-    - name: Terraform Apply
-      working-directory: ${{ env.WORKING_DIRECTORY }}
-      run: terraform apply -auto-approve terraform.tfplan
+      - name: Terraform Apply
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: terraform apply -auto-approve terraform.tfplan
 
   # post-apply-validation:
   #   name: Post-Apply Validation
   #   runs-on: ubuntu-latest
   #   needs: [terraform-plan, terraform-apply]
   #   if: always() && needs.terraform-apply.result == 'success'
-    
+
   #   steps:
   #   - name: Checkout repository
   #     uses: actions/checkout@v4
@@ -247,7 +247,7 @@ jobs:
   #     run: |
   #       echo "Running post-apply validation plan..."
   #       terraform plan -detailed-exitcode -no-color
-        
+
   #       if [ $? -eq 0 ]; then
   #         echo "✅ Validation successful: No drift detected after apply"
   #       elif [ $? -eq 2 ]; then
