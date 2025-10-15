@@ -149,6 +149,9 @@ jobs:
             }
 
             const output = `
+            <details>
+            <summary><strong>${changesPresent === 'true' ? '⚠️ Drift Detected!' : '✅ No Drift Detected'}</strong> - Click to expand Terraform Plan Results</summary>
+            
             ## Terraform Plan Results
 
             **Changes Present:** ${changesPresent}
@@ -156,11 +159,12 @@ jobs:
 
             ${changesPresent === 'true' ? '⚠️ **Drift Detected!** Infrastructure changes are required.' : '✅ No drift detected.'}
             ${planDetails}
+            
+            </details>
             `;
 
             // Add to workflow summary
             await core.summary
-              .addHeading('Terraform Plan Results')
               .addRaw(output)
               .write();
 
