@@ -18,9 +18,9 @@ on:
 env:
   TERRAFORM_VERSION: "1.13.2"
   WORKING_DIRECTORY: "./env"
-  ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
-  ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+  # ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+  # ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+  # ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
   ARM_USE_OIDC: true
   TF_STATE_RESOURCE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP }}
   TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT }}
@@ -45,13 +45,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    # - name: Azure Login
-    #   uses: azure/login@v1
-    #   with:
-    #     client-id: ${{ vars.ARM_CLIENT_ID }}
-    #     tenant-id: ${{ vars.ARM_TENANT_ID }}
-    #     subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -222,13 +215,6 @@ jobs:
       with:
         name: terraform-workspace
         path: ${{ env.WORKING_DIRECTORY }}
-
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        client-id: ${{ vars.ARM_CLIENT_ID }}
-        tenant-id: ${{ vars.ARM_TENANT_ID }}
-        subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
