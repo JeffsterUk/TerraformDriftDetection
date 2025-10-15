@@ -114,37 +114,49 @@ jobs:
               const planOutput = fs.readFileSync(planOutputPath, 'utf8');
               const lines = planOutput.split('\n');
               
-              // Full plan output
-              fullPlanOutput = '\n```\n' + planOutput + '\n```';
-              
               // Brief plan details - only specific lines
               let briefLines = [];
+              let fullLines = [];
               let foundActions = false;
+              let capturingFull = false;
               
               for (const line of lines) {
-                // Include "Terraform will perform the following actions:" line
+                // Start capturing both brief and full when we find "Terraform will perform the following actions:"
                 if (line.includes('Terraform will perform the following actions:')) {
                   briefLines.push(line);
+                  fullLines.push(line);
                   foundActions = true;
+                  capturingFull = true;
                   continue;
                 }
                 
-                // Include lines that start with "  # " (resource actions only)
+                // If we're capturing, include everything in full
+                if (capturingFull) {
+                  fullLines.push(line);
+                }
+                
+                // Include lines that start with "  # " in brief (resource actions only)
                 if (foundActions && line.startsWith('  # ')) {
                   briefLines.push(line);
                   continue;
                 }
                 
-                // Include the "Plan: " summary line
+                // Include the "Plan: " summary line in both and stop capturing
                 if (line.startsWith('Plan: ')) {
-                  briefLines.push('');  // Add empty line before Plan summary
-                  briefLines.push(line);
-                  break;
+                  if (!briefLines.includes(line)) {
+                    briefLines.push('');  // Add empty line before Plan summary
+                    briefLines.push(line);
+                  }
+                  break; // Stop processing after Plan: line
                 }
               }
               
               if (briefLines.length > 0) {
                 briefPlanDetails = '\n```\n' + briefLines.join('\n') + '\n```';
+              }
+              
+              if (fullLines.length > 0) {
+                fullPlanOutput = '\n```\n' + fullLines.join('\n') + '\n```';
               }
             }
 
@@ -152,9 +164,9 @@ jobs:
             
             let output = statusMessage + '\n\n';
             
-            // Brief Plan Results (collapsible)
+            // Brief Plan Results (collapsible, expanded by default)
             if (briefPlanDetails) {
-              output += `<details>
+              output += `<details open>
             <summary><strong>Terraform Plan Results - Brief</strong></summary>
             ${briefPlanDetails}
             </details>
