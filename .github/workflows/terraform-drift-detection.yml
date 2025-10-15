@@ -52,19 +52,6 @@ jobs:
         terraform_version: ${{ env.TERRAFORM_VERSION }}
         terraform_wrapper: false
 
-    # - name: Configure Terraform Backend
-    #   working-directory: ${{ env.WORKING_DIRECTORY }}
-    #   run: |
-    #     cat > backend.tf << EOF
-    #     terraform {
-    #       backend "azurerm" {
-    #         storage_account_name  = "${{ env.TF_STATE_STORAGE_ACCOUNT }}"
-    #         container_name        = "${{ env.TF_STATE_CONTAINER }}"
-    #         key                   = "${{ env.TF_STATE_KEY }}"
-    #       }
-    #     }
-    #     EOF
-
     - name: Terraform Init
       working-directory: ${{ env.WORKING_DIRECTORY }}
       run: |
@@ -72,7 +59,6 @@ jobs:
           -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
           -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
           -backend-config="key=${{ env.TF_STATE_KEY }}"
-      
 
     - name: Terraform Plan
       id: plan
@@ -102,7 +88,7 @@ jobs:
       if: steps.plan.outputs.changes == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: terraform-workspace
+        name: Terraform
         path: ${{ env.WORKING_DIRECTORY }}
         retention-days: 30
 
@@ -217,7 +203,7 @@ jobs:
     - name: Download Terraform Workspace
       uses: actions/download-artifact@v4
       with:
-        name: terraform-workspace
+        name: Terraform
         path: ${{ env.WORKING_DIRECTORY }}
 
     - name: Setup Terraform
@@ -253,18 +239,6 @@ jobs:
   #     with:
   #       terraform_version: ${{ env.TERRAFORM_VERSION }}
   #       terraform_wrapper: false
-
-  #   - name: Configure Terraform Backend
-  #     run: |
-  #       cat > backend.tf << EOF
-  #       terraform {
-  #         backend "azurerm" {
-  #           storage_account_name  = "${{ env.TF_STATE_STORAGE_ACCOUNT }}"
-  #           container_name        = "${{ env.TF_STATE_CONTAINER }}"
-  #           key                   = "${{ env.TF_STATE_KEY }}"
-  #         }
-  #       }
-  #       EOF
 
   #   - name: Terraform Init
   #     run: terraform init
