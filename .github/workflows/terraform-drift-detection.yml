@@ -12,11 +12,8 @@ on:
     - cron: '0 3 * * 1-5'
   workflow_dispatch:
   push:
-    branches:
+    branches-ignore:
       - main
-    paths:
-      - 'env/**'
-      - '.github/workflows/**'
 
 env:
   TERRAFORM_VERSION: "1.13.2"
