@@ -146,14 +146,8 @@ jobs:
             await core.summary.addRaw(output).write();
             console.log('Summary added with brief and full plan results');
 
-  create-issue:
-    name: Create Drift Detection Issue
-    runs-on: ubuntu-latest
-    needs: terraform-plan
-    # if: needs.terraform-plan.outputs.changes == 'true' && github.event_name == 'schedule'
-
-    steps:
       - name: Create Issue for Drift Detection
+        if: steps.plan.outputs.changes == 'true' && github.event_name == 'schedule'
         uses: actions/github-script@v7
         with:
           script: |
@@ -173,7 +167,7 @@ jobs:
             1. Review the Terraform plan output in the workflow logs
             2. Investigate the cause of the drift
             3. Determine if changes should be applied or if manual intervention is required
-            4. Run the workflow manually with \`apply_changes: true\` if changes should be applied
+            4. Run the workflow manually to apply changes with approval gate
 
             ### Links
             - [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
