@@ -1,0 +1,36 @@
+name: 'Terraform Setup'
+description: 'Setup Terraform and initialize with backend configuration'
+inputs:
+  working_directory:
+    description: 'Working directory containing Terraform files'
+    required: true
+  tf_version:
+    description: 'Terraform version to install'
+    required: true
+  tf_state_storage_account:
+    description: 'Azure storage account name for Terraform state'
+    required: true
+  tf_state_container:
+    description: 'Azure storage container name for Terraform state'
+    required: true
+  tf_state_key:
+    description: 'Terraform state file key'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.tf_version }}
+        terraform_wrapper: false
+
+    - name: Terraform Init
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        terraform init \
+          -backend-config="storage_account_name=${{ inputs.tf_state_storage_account }}" \
+          -backend-config="container_name=${{ inputs.tf_state_container }}" \
+          -backend-config="key=${{ inputs.tf_state_key }}"
