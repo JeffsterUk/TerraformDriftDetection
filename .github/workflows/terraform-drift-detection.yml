@@ -33,7 +33,7 @@ jobs:
     name: Terraform Plan
     runs-on: ubuntu-latest
     environment: Production-Plan
-    permissions:
+    permissions: # TODO: Improve understanding
       id-token: write
       contents: read
       pull-requests: write
@@ -88,7 +88,7 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Upload Terraform Plan
+      - name: Upload Terraform Code & Plan
         if: steps.plan.outputs.changes == 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -167,7 +167,7 @@ jobs:
             // Get the plan brief from the previous step and unescape it
             const planBriefRaw = '${{ steps.summary.outputs.plan-brief }}';
             const planBrief = planBriefRaw.replace(/\\n/g, '\n').replace(/\\`/g, '`').replace(/\\\$/g, '$');
-            const planSection = planBrief ? `\n### Terraform Plan Summary\n\n\`\`\`\n${planBrief}\n\`\`\`\n` : '';
+            const planSection = planBrief ? `\n<details>\n<summary><strong>Terraform Plan Summary</strong></summary>\n\n\`\`\`\n${planBrief}\n\`\`\`\n\n</details>\n` : '';
             
             const body = `
             ## Terraform Drift Detection Alert
@@ -212,12 +212,22 @@ jobs:
               
               console.log(`Created issue: ${issue.data.html_url}`);
             } else {
-              // Update existing issue with new run information
+              // Update existing issue with new run information including plan brief
+              const commentPlanSection = planBrief ? `\n\n<details>\n<summary><strong>Terraform Plan Summary</strong></summary>\n\n\`\`\`\n${planBrief}\n\`\`\`\n\n</details>` : '';
+              
+              const commentBody = [
+                '🔄 **Additional drift detected**',
+                '',
+                '**Workflow:** ${{ github.workflow }}',
+                '**Run:** [${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})',
+                '**SHA:** ${{ github.sha }}' + commentPlanSection
+              ].join('\n');
+              
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: existingIssue.number,
-                body: `🔄 **Additional drift detected in run ${{ github.run_number }}**\n\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+                body: commentBody
               });
               
               console.log(`Updated existing issue: ${existingIssue.html_url}`);
@@ -228,13 +238,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: terraform-plan
     if: needs.terraform-plan.outputs.changes-present == 'true' && github.event_name == 'workflow_dispatch'
-    environment: Production-Apply
-    permissions:
+    environment: Production-Apply # TODO: Timeout Required?
+    permissions: # TODO: Improve understanding
       id-token: write
       contents: read
 
     steps:
-      - name: Download Terraform Workspace
+      - name: Download Terraform Code & Plan
         uses: actions/download-artifact@v4
         with:
           name: Terraform
