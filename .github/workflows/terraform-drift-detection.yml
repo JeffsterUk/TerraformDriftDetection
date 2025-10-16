@@ -26,6 +26,7 @@ env:
   TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT }}
   TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER }}
   TF_STATE_KEY: ${{ vars.TF_STATE_KEY }}
+  TASK_TDD_TITLE: 'POC TDD: Terraform Drift Detected'
 
 jobs:
   terraform-plan:
@@ -161,7 +162,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const title = `${{ github.workflow }}: Terraform Drift Detected`;
+            const title = `${{ env.TASK_TDD_TITLE }}`;
             
             // Get the plan brief from the previous step and unescape it
             const planBriefRaw = '${{ steps.summary.outputs.plan-brief }}';
