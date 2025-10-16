@@ -268,36 +268,108 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
         run: terraform apply -auto-approve terraform.tfplan
 
-  # post-apply-validation:
-  #   name: Post-Apply Validation
-  #   runs-on: ubuntu-latest
-  #   needs: [terraform-plan, terraform-apply]
-  #   if: always() && needs.terraform-apply.result == 'success'
+  terraform-plan-post-apply:
+    name: Post-Apply Validation
+    runs-on: ubuntu-latest
+    environment: Production-Plan
+    needs: [terraform-plan, terraform-apply]
 
-  #   steps:
-  #   - name: Checkout repository
-  #     uses: actions/checkout@v4
+    steps:
+    - name: Download Terraform Code & Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: Terraform
+        path: ${{ env.WORKING_DIRECTORY }}
 
-  #   - name: Setup Terraform
-  #     uses: hashicorp/setup-terraform@v3
-  #     with:
-  #       terraform_version: ${{ env.TERRAFORM_VERSION }}
-  #       terraform_wrapper: false
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+        terraform_wrapper: false
 
-  #   - name: Terraform Init
-  #     run: terraform init
+    - name: Terraform Init
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: |
+        terraform init \
+          -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
+          -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
+          -backend-config="key=${{ env.TF_STATE_KEY }}"
 
-  #   - name: Terraform Plan (Validation)
-  #     run: |
-  #       echo "Running post-apply validation plan..."
-  #       terraform plan -detailed-exitcode -no-color
+    - name: Terraform Plan (Validation)
+      id: validation-plan
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: |
+        echo "Running post-apply validation plan..."
+        export exitcode=0
+        terraform plan -detailed-exitcode -no-color > validation_plan_output.txt 2>&1 || export exitcode=$?
 
-  #       if [ $? -eq 0 ]; then
-  #         echo "✅ Validation successful: No drift detected after apply"
-  #       elif [ $? -eq 2 ]; then
-  #         echo "⚠️ Warning: Drift still detected after apply - manual review required"
-  #         exit 1
-  #       else
-  #         echo "❌ Error: Plan failed"
-  #         exit 1
-  #       fi
+        echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+
+        if [ $exitcode -eq 0 ]; then
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "✅ Validation successful: No drift detected after apply"
+          cat validation_plan_output.txt
+        elif [ $exitcode -eq 2 ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Warning: Drift still detected after apply - manual review required"
+          cat validation_plan_output.txt
+          exit 1
+        else
+          echo "❌ Error: Plan failed"
+          cat validation_plan_output.txt
+          exit 1
+        fi
+
+    - name: Add Validation Plan Results to Summary
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          const changesPresent = '${{ steps.validation-plan.outputs.changes }}';
+          const planOutputPath = path.join('${{ env.WORKING_DIRECTORY }}', 'validation_plan_output.txt');
+          
+          // Helper function to extract plan sections
+          function extractPlanSections(planContent) {
+            const lines = planContent.split('\n');
+            let briefLines = [], fullLines = [], capturing = false;
+            
+            for (const line of lines) {
+              if (line.includes('Terraform will perform the following actions:')) {
+                briefLines.push(line);
+                fullLines.push(line);
+                capturing = true;
+              } else if (capturing) {
+                fullLines.push(line);
+                if (line.startsWith('  # ')) briefLines.push(line);
+                if (line.startsWith('Plan: ')) {
+                  if (!briefLines.includes(line)) briefLines.push('', line);
+                  break;
+                }
+              }
+            }
+            
+            return {
+              brief: briefLines.length ? briefLines.join('\n') : '',
+              briefFormatted: briefLines.length ? '\n```\n' + briefLines.join('\n') + '\n```' : '',
+              full: fullLines.length ? '\n```\n' + fullLines.join('\n') + '\n```' : ''
+            };
+          }
+          
+          // Generate summary content
+          const statusMessage = changesPresent === 'true' ? 
+            '⚠️ Post-Apply Validation: Additional Changes Detected ⚠️' : 
+            '✅ Post-Apply Validation: No Additional Changes Detected';
+          let output = statusMessage + '\n\n';
+          
+          if (fs.existsSync(planOutputPath)) {
+            const planContent = fs.readFileSync(planOutputPath, 'utf8');
+            const { brief, briefFormatted, full } = extractPlanSections(planContent);
+            
+            if (briefFormatted) output += `<details>\n<summary><strong>Post-Apply Validation Plan Results - Brief</strong></summary>\n${briefFormatted}\n</details>\n\n`;
+            if (full) output += `<details>\n<summary><strong>Post-Apply Validation Plan Results - Full</strong></summary>\n${full}\n</details>`;
+          }
+          
+          await core.summary.addRaw(output).write();
+          console.log('Post-apply validation summary added');
