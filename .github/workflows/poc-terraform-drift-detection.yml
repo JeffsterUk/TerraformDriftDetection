@@ -1,0 +1,34 @@
+# ------------------------------------------------------------------------------------ #
+#
+#   POC - Terraform Drift Detection
+#   Uses the reusable workflow with environment-specific parameters
+#
+# ------------------------------------------------------------------------------------ #
+
+name: Poc - Terraform Drift Detection
+
+on:
+  schedule:
+    # Run at 3am Monday-Friday (UTC)
+    - cron: "0 3 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  env1-drift-detection:
+    name: Environment 1 Drift Detection
+    uses: ./.github/workflows/terraform-workflow-template.yml
+    with:
+      arm_subscription_id: '539fe1f3-3901-4080-a6b2-2663bb5a0cd8'
+      arm_client_id: '65647e23-301b-4339-966a-236cb4ae64b0'
+      arm_tenant_id: '23094f0b-5e78-428d-a15e-d74f0eb71d6a'
+      environment_plan: 'Production-Plan'
+      environment_apply: 'Production-Apply'
+      tf_version: '1.13.2'
+      tf_state_storage_account: 'poctddsa'
+      tf_state_container: 'tfstate'
+      tf_state_key: 'POC-TDD.tfstate'
+      task_title: 'POC TDD: Terraform Drift Detected'
+      working_directory: './env'

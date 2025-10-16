@@ -1,0 +1,160 @@
+# ------------------------------------------------------------------------------------ #
+#
+#   Reusable GitHub Actions Workflow for Terraform Drift Detection
+#   Can be called from multiple environment-specific workflows
+#
+# ------------------------------------------------------------------------------------ #
+
+name: Terraform Drift Detection (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      arm_subscription_id:
+        description: 'Azure subscription ID'
+        required: true
+        type: string
+      arm_client_id:
+        description: 'Azure client ID for authentication'
+        required: true
+        type: string
+      arm_tenant_id:
+        description: 'Azure tenant ID'
+        required: true
+        type: string
+      environment_plan:
+        description: 'GitHub environment for plan operations'
+        required: false
+        type: string
+        default: 'Production-Plan'
+      environment_apply:
+        description: 'GitHub environment for apply operations'
+        required: false
+        type: string
+        default: 'Production-Apply'
+      tf_version:
+        description: 'Terraform version to use'
+        required: true
+        type: string
+      tf_state_storage_account:
+        description: 'Azure storage account name for Terraform state'
+        required: true
+        type: string
+      tf_state_container:
+        description: 'Azure storage container name for Terraform state'
+        required: true
+        type: string
+      tf_state_key:
+        description: 'Terraform state file key'
+        required: true
+        type: string
+      task_title:
+        description: 'Title for drift detection tasks/issues'
+        required: true
+        type: string
+      working_directory:
+        description: 'Working directory containing Terraform files'
+        required: true
+        type: string
+
+env:
+  ARM_SUBSCRIPTION_ID: ${{ inputs.arm_subscription_id }}
+  ARM_CLIENT_ID: ${{ inputs.arm_client_id }}
+  ARM_TENANT_ID: ${{ inputs.arm_tenant_id }}
+  ARM_USE_OIDC: true
+  ARM_USE_AZUREAD: true
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_plan }}
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+      repository-projects: write
+    outputs:
+      changes-present: ${{ steps.plan.outputs.changes }}
+      plan-exitcode: ${{ steps.plan.outputs.exitcode }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform Environment
+        uses: ./.github/actions/terraform-setup
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          tf_version: ${{ inputs.tf_version }}
+          tf_state_storage_account: ${{ inputs.tf_state_storage_account }}
+          tf_state_container: ${{ inputs.tf_state_container }}
+          tf_state_key: ${{ inputs.tf_state_key }}
+
+      - name: Terraform Plan with Summary and Actions
+        id: plan
+        uses: ./.github/actions/terraform-plan
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          task_tdd_title: ${{ inputs.task_title }}
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: needs.terraform-plan.outputs.changes-present == 'true' && github.event_name == 'workflow_dispatch'
+    environment: ${{ inputs.environment_apply }}
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download Terraform Code & Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: Terraform
+          path: ${{ inputs.working_directory }}
+
+      - name: Setup Terraform Environment
+        uses: ./.github/actions/terraform-setup
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          tf_version: ${{ inputs.tf_version }}
+          tf_state_storage_account: ${{ inputs.tf_state_storage_account }}
+          tf_state_container: ${{ inputs.tf_state_container }}
+          tf_state_key: ${{ inputs.tf_state_key }}
+
+      - name: Terraform Apply
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform apply -auto-approve terraform.tfplan
+
+  terraform-plan-post-apply:
+    name: Post-Apply Validation
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_plan }}
+    needs: [terraform-plan, terraform-apply]
+
+    steps:
+    - name: Download Terraform Code & Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: Terraform
+        path: ${{ inputs.working_directory }}
+
+    - name: Setup Terraform Environment
+      uses: ./.github/actions/terraform-setup
+      with:
+        working_directory: ${{ inputs.working_directory }}
+        tf_version: ${{ inputs.tf_version }}
+        tf_state_storage_account: ${{ inputs.tf_state_storage_account }}
+        tf_state_container: ${{ inputs.tf_state_container }}
+        tf_state_key: ${{ inputs.tf_state_key }}
+
+    - name: Post-Apply Validation Plan with Summary
+      id: validation-plan
+      uses: ./.github/actions/terraform-plan
+      with:
+        working_directory: ${{ inputs.working_directory }}
+        summary_title_prefix: 'Terraform Plan (Post-Apply)'
+        enable_artifact_upload: 'false'
