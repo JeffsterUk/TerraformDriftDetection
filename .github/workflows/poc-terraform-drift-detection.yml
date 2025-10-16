@@ -17,8 +17,7 @@ on:
       - main
 
 jobs:
-  env1-drift-detection:
-    name: Environment 1 Drift Detection
+  terraform:
     uses: ./.github/workflows/terraform-workflow-template.yml
     with:
       arm_subscription_id: '539fe1f3-3901-4080-a6b2-2663bb5a0cd8'
