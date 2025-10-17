@@ -149,7 +149,7 @@ runs:
           console.log(`${titlePrefix} summary added with brief and full plan results`);
 
     - name: Create Issue for Drift Detection
-      if: steps.plan.outputs.changes == 'true' && github.event_name != 'schedule' # TODO: Change back to '== schedule' after testing
+      if: steps.plan.outputs.changes == 'true' && github.event_name == 'schedule'
       uses: actions/github-script@v7
       with:
         script: |
