@@ -70,8 +70,11 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: Terraform
-        path: ${{ github.workspace }}
+        path: |
+          ${{ github.workspace }}/.github
+          ${{ inputs.working_directory }}
         retention-days: 30
+        if-no-files-found: warn
 
     - name: Add Plan Results to Summary
       id: summary
