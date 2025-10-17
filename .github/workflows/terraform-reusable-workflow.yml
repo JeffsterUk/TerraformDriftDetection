@@ -67,8 +67,8 @@ jobs:
     name: Plan
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment_plan }}
-    # permissions:
-      # id-token: write
+    permissions:
+      id-token: write
       # contents: read
       # pull-requests: write
       # issues: write
