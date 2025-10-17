@@ -114,11 +114,6 @@ jobs:
           name: Terraform
           path: ${{ github.workspace }}
 
-      - name: List workspace contents
-        run: |
-          echo "Listing all files and folders recursively in ${{ github.workspace }}"
-          ls -alR ${{ github.workspace }}
-
       - name: Setup Terraform Environment
         uses: ./.github/actions/terraform-setup
         with:
@@ -136,6 +131,12 @@ jobs:
     name: Plan (Post Apply)
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment_plan }}
+    permissions:
+      id-token: write
+      # contents: read
+      # pull-requests: write
+      # issues: write
+      # repository-projects: write
     needs: [plan, apply]
 
     steps:

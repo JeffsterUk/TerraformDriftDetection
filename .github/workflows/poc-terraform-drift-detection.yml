@@ -19,7 +19,7 @@ on:
 jobs:
   terraform:
     name: Terraform
-    uses: ./.github/workflows/terraform-workflow-template.yml
+    uses: ./.github/workflows/terraform-reusable-workflow.yml
     with:
       arm_subscription_id: '539fe1f3-3901-4080-a6b2-2663bb5a0cd8'
       arm_client_id: '65647e23-301b-4339-966a-236cb4ae64b0'
