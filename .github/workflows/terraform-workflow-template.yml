@@ -1,11 +1,9 @@
 # ------------------------------------------------------------------------------------ #
 #
-#   Reusable GitHub Actions Workflow for Terraform Drift Detection
+#   Reusable GitHub Actions Workflow for Terraform
 #   Can be called from multiple environment-specific workflows
 #
 # ------------------------------------------------------------------------------------ #
-
-name: Terraform Drift Detection (Reusable)
 
 on:
   workflow_call:
@@ -103,7 +101,7 @@ jobs:
     name: Apply
     runs-on: ubuntu-latest
     needs: plan
-    if: needs.plan.outputs.changes-present == 'true' && github.event_name == 'workflow_dispatch'
+    if: needs.plan.outputs.changes-present == 'true' # TODO: Enable: && github.event_name == 'workflow_dispatch'
     environment: ${{ inputs.environment_apply }}
     permissions:
       id-token: write
@@ -114,7 +112,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: Terraform
-          path: ${{ inputs.working_directory }}
+          path: ${{ github.workspace }}
 
       - name: Setup Terraform Environment
         uses: ./.github/actions/terraform-setup
@@ -140,7 +138,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: Terraform
-        path: ${{ inputs.working_directory }}
+        path: ${{ github.workspace }}
 
     - name: Setup Terraform Environment
       uses: ./.github/actions/terraform-setup
