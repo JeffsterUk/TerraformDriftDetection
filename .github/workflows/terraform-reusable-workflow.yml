@@ -71,7 +71,7 @@ jobs:
       id-token: write
       # contents: read
       # pull-requests: write
-      # issues: write
+      issues: write
       # repository-projects: write
     outputs:
       changes-present: ${{ steps.plan.outputs.changes }}
@@ -105,7 +105,7 @@ jobs:
     environment: ${{ inputs.environment_apply }}
     permissions:
       id-token: write
-      contents: read
+      # contents: read
 
     steps:
       - name: Download Terraform Code & Plan
