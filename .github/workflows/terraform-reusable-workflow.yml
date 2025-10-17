@@ -69,9 +69,9 @@ jobs:
     environment: ${{ inputs.environment_plan }}
     permissions:
       id-token: write
+      issues: write
       # contents: read
       # pull-requests: write
-      issues: write
       # repository-projects: write
     outputs:
       changes-present: ${{ steps.plan.outputs.changes }}
@@ -131,11 +131,11 @@ jobs:
     name: Plan (Post Apply)
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment_plan }}
-    permissions:
+    permissions: # TODO: Tidy Up
       id-token: write
+      issues: write
       # contents: read
       # pull-requests: write
-      # issues: write
       # repository-projects: write
     needs: [plan, apply]
 
