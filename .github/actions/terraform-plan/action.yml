@@ -35,14 +35,13 @@ runs:
       id: plan
       shell: bash
       working-directory: ${{ inputs.working_directory }}
-      run: |
-        echo "Running terraform plan..."
-        
+      run: |        
         # Clean up any existing plan files from previous runs
         echo "Cleaning up existing plan files..."
         rm -f plan_output.txt terraform.tfplan
         
         # Execute plan and capture output
+        echo "Running terraform plan..."
         export exitcode=0
         terraform plan -detailed-exitcode -no-color -out terraform.tfplan > plan_output.txt 2>&1 || export exitcode=$?
 
@@ -70,8 +69,14 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: Terraform
-        path: ${{ inputs.working_directory }}
+        path: |
+          ${{ github.workspace }}/.github
+          ${{ inputs.working_directory }}
+          !${{ inputs.working_directory }}/.terraform
+          !${{ inputs.working_directory }}/.terraform.lock.hcl
         retention-days: 30
+        if-no-files-found: warn
+        include-hidden-files: true
 
     - name: Add Plan Results to Summary
       id: summary
@@ -144,7 +149,7 @@ runs:
           console.log(`${titlePrefix} summary added with brief and full plan results`);
 
     - name: Create Issue for Drift Detection
-      if: steps.plan.outputs.changes == 'true' && github.event_name != 'schedule' # TODO: Change back to '== schedule' after testing
+      if: steps.plan.outputs.changes == 'true' && github.event_name == 'schedule'
       uses: actions/github-script@v7
       with:
         script: |
